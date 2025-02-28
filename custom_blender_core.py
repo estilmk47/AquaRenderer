@@ -67,3 +67,46 @@ def bmesh_find_vertecies_in_plane(bmesh: bmesh, direction='x', shift=0, threshol
                 verts.append(v)
     
     return tuple(verts)
+
+def method_turn_into_structured_grid(bmesh: bmesh, x_start, x_end, y_start, y_end, x_resolution, y_resolution):
+    bmesh.clear()
+
+    x_length = x_end - x_start
+    y_length = y_end - y_start
+    dx = x_length/x_resolution
+    dy = y_length/y_resolution
+
+    for i in range(y_resolution+1):
+        y = y_start + i * dy
+        for j in range(x_resolution+1):
+            x = x_start + j * dx
+            bmesh.verts.new((x, y, 0))
+
+    bmesh.verts.ensure_lookup_table()
+
+def structured_grid_vert_index(x_value, y_value, x_start, x_end, y_start, y_end, x_resolution, y_resolution, x_threshold=None, y_threshold=None, bmesh = None):
+    if x_value > x_end or y_value > y_end or x_value < x_start or y_value < y_start:
+        return None
+    
+    x_length = x_end - x_start
+    y_length = y_end - y_start
+    dx = x_length/x_resolution
+    dy = y_length/y_resolution
+
+    index_shift_x = round((x_resolution*(x_value-x_start))/(x_length))
+    index_shift_y = round((y_resolution*(y_value-y_start))/(y_length))
+    index = (x_resolution+1)*index_shift_y + index_shift_x
+
+    if BLENDER_AVAILABLE:
+        if x_threshold == None:
+            x_threshold = dx/2
+        if y_threshold == None:
+            y_threshold = dy/2
+        vert = bmesh.verts[index]
+
+        if abs(vert.co.x - x_value) > x_threshold or abs(vert.co.y - y_value) > y_threshold:
+            print(f"Point: ({x_value}, {y_value}) was assigned index: {index}")
+            print(f"However the mesh vertex assosiated with index {index} has the coordinates {vert.co}, which is outside the thershold values of ({x_threshold}, {y_threshold})") 
+            return None
+    
+    return index

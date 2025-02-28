@@ -8,6 +8,8 @@ class Context:
         self._grid_resolution = [] # B 2
         self._domain_dimentions = [] # B 10
         self._static_primitives_cmds = [] # S 10, 11, 12, 32, 33, 
+        self._mpi_cores = 1
+        self._floating = False
 
     @property
     def grid_resolution(self):
@@ -16,6 +18,14 @@ class Context:
     @property
     def domain_dimentions(self):
         return self._domain_dimentions
+    
+    @property
+    def mpi_cores(self):
+        return self._mpi_cores
+    
+    @property
+    def floating(self):
+        return self._floating
 
     def read_ctrl(self, filepath: str):
         if not filepath.endswith("ctrl.txt"):
@@ -25,7 +35,23 @@ class Context:
             for line in file:
                 parts = line.split()
                 if parts:
-                    pass
+                    try:
+                        cmd_class = parts[0]
+                        cmd_type = int(parts[1])
+                        cmd_variables = [parts[i] for i in range(2, len(parts))]
+
+                        if cmd_class == "M": # MPI
+                            if cmd_type == 10:
+                                self._mpi_cores = int(cmd_variables[0])
+                            # elif cmd_type == 10:
+                            #     pass
+                            else:
+                                raise
+                        elif cmd_class == "X": # 6DOF
+                            if cmd_type == 180:
+                                self._floating = True
+                    except:
+                        print(f"Unable to parse line: {line}")
 
     def read_control(self, filepath: str):
         if not filepath.endswith("control.txt"):
