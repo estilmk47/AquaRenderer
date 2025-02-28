@@ -292,16 +292,33 @@ def extract_NHFLOW_mesh_from_pvtu(filepath: str, context: Context, surface_only=
 
     return bm
 
-def extract_NHFLOW_6DOF(filepath, frame):
+def extract_NHFLOW_6DOF(filepath, frame, fps=24):
     df = pd.read_csv(filepath, sep='\s+')
     if frame >= len(df):
         print("Frame out of range")
         return None, None
     
-    row = df.iloc[frame]
+    buffer = 10
+    time = frame/fps
+
+    start_time = df.iloc[0]['time']
+    end_time = df.iloc[len(df)-1]['time']
+    total_time = end_time - start_time
+
+    index = int(math.floor(time*len(df)/total_time) - buffer)
+    index = 0 if index < 0 else index
+    row = df.iloc[index]
+    t = row['time']
     position = (row['XG'], row['YG'], row['ZG'])
-    rotation_zyx = tuple(math.radians(row[angle]) for angle in ['Psi', 'Theta', 'Phi']) # Convert from degrees to radians
+    rotation_zyx = tuple(math.radians(row[angle]) for angle in ['Phi', 'Theta', 'Psi']) # Convert from degrees to radians
+    while t - time < 0 and index < len(df):
+        row = df.iloc[index]
+        t = row['time']
+        position = (row['XG'], row['YG'], row['ZG'])
+        rotation_zyx = tuple(math.radians(row[angle]) for angle in ['Phi', 'Theta', 'Psi'])
+        index += 1
     
+    # print(f'Data file found matching data for 6DOF item for frame {frame} [{time}] at time {t}')
     return position, rotation_zyx
 
 def fill_zeros(frame_count, length=8):
@@ -376,45 +393,42 @@ def create_water_object(mesh_data: bmesh, object_name: str, collection: str, vis
     bm.to_mesh(mesh)
     bm.free()
 
-def pose_floating(position, rotation_zyx, keyframe = -1):
-    obj = bpy.data.objects.get("floating")
-    wrf = bpy.data.objects.get("floating_wireframe")
-    if obj is None and wrf is None:
-        print("Object 'floating' not found in 'Floating' collection")
-        return
-    
-    obj.location = position
-    obj.rotation_mode = 'ZYX'
-    obj.rotation_euler = rotation_zyx
-
-    wrf.location = position
-    wrf.rotation_mode = 'ZYX'
-    wrf.rotation_euler = rotation_zyx
-    
-    if keyframe > -1:
-        obj.keyframe_insert(data_path="location", frame=keyframe)
-        obj.keyframe_insert(data_path="rotation_euler", frame=keyframe)
-        wrf.keyframe_insert(data_path="location", frame=keyframe)
-        wrf.keyframe_insert(data_path="rotation_euler", frame=keyframe)
+def pose_floating(object_names, position, rotation_zyx, keyframe = -1):
+    for name in object_names:
+        obj = bpy.data.objects.get(name)
+        if obj is None:
+            print(f"Object '{name}' not found in blenders data > objects")
+            return
+        
+        obj.location = position
+        obj.rotation_mode = 'ZYX'
+        obj.rotation_euler = rotation_zyx
+        
+        if keyframe > -1:
+            obj.keyframe_insert(data_path="location", frame=keyframe)
+            obj.keyframe_insert(data_path="rotation_euler", frame=keyframe)
 
 if __name__ == "__main__":
-    experiment = 'examples/floating'
+    render = True  # TODO
+    nhflow = True  # TODO
+    floating = False # TODO
+    simulation = 'examples/floating'    # TODO
 
     context = Context()
-    context.read_control(f'{root}/data/{experiment}/control.txt')
-    context.read_ctrl(f'{root}/data/{experiment}/ctrl.txt')
+    context.read_control(f'{root}/data/{simulation}/control.txt')
+    context.read_ctrl(f'{root}/data/{simulation}/ctrl.txt')
 
-    # fps = 24
+    fps = 24 # TODO: find this from context and set the blender fps to this fps 
 
-    start_frame = 0
-    end_frame = 721  # TODO: Set to 1 -> then setup blender to nice render settings on that one sample -> then change this to fit your simulation 721
-    batch_size = 4  # Number of frames loaded at a time
+    start_frame = 124   # TODO
+    end_frame = 721     # TODO
+    batch_size = 4      # TODO: anywhere between 1 and 4 should be nice regardless of your PC specs  
 
-    filepath = f"data/{experiment}/REEF3D_NHFLOW_VTU" # TODO: change this
-    file_name_skeleton_0 = "REEF3D-NHFLOW-"
-    file_name_skeleton_1 = ".pvtu"
+    bpy.context.scene.frame_start = start_frame
+    bpy.context.scene.frame_end = end_frame
 
     wave_collection = 'Waves'
+
     frames_loaded = start_frame-1
     batch = 0
     for batch_start in range(start_frame, end_frame, batch_size):
@@ -427,38 +441,52 @@ if __name__ == "__main__":
         # Load the batch of frames
         print(f"\n\nBatch {batch}")
         for frame in range(batch_start, batch_end):
-            filepath_pvtu = f"{root}/{filepath}/{file_name_skeleton_0}{fill_zeros(frame)}{file_name_skeleton_1}"
-            mesh = extract_NHFLOW_mesh_from_pvtu(
-                filepath=filepath_pvtu, 
-                context=context, 
-                surface_only=False,
-                with_attributes=False,
-                with_faces=True,
-            )
-            create_water_object(
-                mesh_data=mesh, 
-                object_name=f'wave_{fill_zeros(frame, len(str(end_frame)))}', 
-                collection=wave_collection,
-                visible_keyframe=frame,
-                as_pointcloud=False,
-                subdevide_and_edge_crease=True
-            )
+            ####################
+            ###    NHFLOW    ###
+            ####################
+            if True and nhflow: # TODO: replace True with context.nhflow
+                filepath = f"data/{simulation}/REEF3D_NHFLOW_VTU" # TODO: change this
+                file_name_skeleton_0 = "REEF3D-NHFLOW-"
+                file_name_skeleton_1 = ".pvtu"
+                filepath_pvtu = f"{root}/{filepath}/{file_name_skeleton_0}{fill_zeros(frame)}{file_name_skeleton_1}"
+                mesh = extract_NHFLOW_mesh_from_pvtu(
+                    filepath=filepath_pvtu, 
+                    context=context, 
+                    surface_only=False,
+                    with_attributes=False,
+                    with_faces=True,
+                )
+                create_water_object(
+                    mesh_data=mesh, 
+                    object_name=f'wave_{fill_zeros(frame, len(str(end_frame)))}', 
+                    collection=wave_collection,
+                    visible_keyframe=frame,
+                    as_pointcloud=False,
+                    subdevide_and_edge_crease=True
+                )
+
+            ####################
+            ###   Floating   ###
+            ####################
+            if context.floating and floating:
+                filepath_dat = f"{root}/data/{simulation}/REEF3D_NHFLOW_6DOF/REEF3D_6DOF_position_0.dat"
+                position, rotation_zyx = extract_NHFLOW_6DOF(filepath=filepath_dat, frame=frame, fps=fps)
+                pose_floating(object_names=['floating', 'floating_wireframe'], position=position, rotation_zyx=rotation_zyx, keyframe=frame) # TODO
+
+            ####################
+            ###    Print     ###
+            ####################
             frames_loaded += 1
-
-            if context.floating:
-                filepath_dat = f"{root}/data/{experiment}/REEF3D_NHFLOW_6DOF/REEF3D_6DOF_position_0.dat"
-                position, rotation_zyx = extract_NHFLOW_6DOF(filepath_dat, frame)
-                pose_floating(position=position, rotation_zyx=rotation_zyx, keyframe=frame)
-
             print_progress(frame-batch_start, (batch_end-batch_start))
             
             
 
         # Update and move the render window to avoid overwriting render settings
-        bpy.context.scene.frame_start = batch_start
-        bpy.context.scene.frame_end = batch_end - 1
-        bpy.context.scene.frame_set(batch_start)
+        if render or nhflow:
+            bpy.context.scene.frame_start = batch_start
+            bpy.context.scene.frame_end = batch_end - 1
+        if render:
+            bpy.context.scene.frame_set(batch_start)
+            bpy.ops.render.render(animation=True)
 
-        # Trigger render
-        bpy.ops.render.render(animation=True)
         print_progress(frames_loaded-start_frame, end_frame-start_frame)

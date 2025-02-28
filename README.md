@@ -49,7 +49,8 @@ If you don't know which libraries these are [but you want to know], may I sugges
 - VS Code:
     - The bpy object is "quantom entageled" with the blender file. We download blender-stubs instead to make the IDE [VS Code] get acces to autocomplete which makes code dev much easier in these modern times. This means, on the other hand, that the script will not be able to run from your IDE as it does not have acces to the blender file [only the stbs]. Run the script from blender instead:
 - BLENDER:
-    - The base blender file [main.blend] is suppose to have a few 
+    - The base blender file [main.blend] is suppose to have a few assets "living inside the blender file" (eg geometry nodes and some objects). The script assumes these are pressent. If you modify the name of these the script may fail.
+    - Blender only fetches the script you are running and the other dependant script that are not allready fetched. If you modify scripts that the main script depends on blender will not know unless you close and re-open the blender file. DO NOT waste time debugging code that is not even beeing run!
     - The Scripting window layout have been changed to be convenient for development with VS Code. After a change in VS Code a RED alert should be visible on the scripting tab. Click on it and 
 
 - ENVIRONMENT:
