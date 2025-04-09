@@ -1,0 +1,29 @@
+A 10 5
+
+B 90 1
+B 92 4
+B 93 0.6 3.0
+B 96 5.0 10.0
+
+B 98 2
+B 99 1
+
+F 60 3.0
+
+// N 40 4 // floating algorithm uses low-storage 3rd-order Runge-Kutta scheme internally (FOR CFD not NHFLOW)
+N 41 30.0
+N 47 0.5
+
+M 10 16
+
+P 10 1
+P 30 0.04166666
+
+W 1 1000.0 // density of water
+W 22 -9.81 // gravitational acceleration
+
+X 10 1 // turn on 6DOF simulation
+X 11 1 1 1 1 1 1 // enable translational motions
+X 21 500.0 // density of floating body
+X 180 1 // use STL geometry
+X 182 12.5 12.5 4.0 // move geometry to initial position
