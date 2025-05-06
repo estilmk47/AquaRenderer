@@ -6,15 +6,19 @@ try:
 except ImportError:
     BLENDER_AVAILABLE = False
 
+# PYTHON_CORE_LIBS
+import math
 import sys
 import os
+
+# BLENDER SITE-PACKAGES
 import numpy as np
 
 root = '.'
 if BLENDER_AVAILABLE:
     root = bpy.data.filepath        # The filepath of the .blend file you run the script in
     root = os.path.dirname(root)    # The repo you are working in [most likely]
-    venv = 'venv'
+    venv = 'venv'                   # TODO-USER
     pyhton_env_path = f'{root}\{venv}\Lib\site-packages'
     sys.path.append(pyhton_env_path)
     sys.path.append(root)
@@ -23,14 +27,10 @@ if BLENDER_AVAILABLE:
 from custom_blender_core import *
 from divemesh_reef3d import Context
 
-
-# PYTHON_CORE_LIBS
-import math
-
 # PYTHON SITE-PACKAGES
 import vtkmodules.all as vtk
 import pandas as pd
-# print(f"vtk module version {vtk.VTK_VERSION}")
+import xml.etree.ElementTree as ET
 
 def exctract_NHFLOW_pointcloud_from_pvtu(filepath: str, context: Context, with_attributes=True):
     if not BLENDER_AVAILABLE:
@@ -72,6 +72,138 @@ def exctract_NHFLOW_pointcloud_from_pvtu(filepath: str, context: Context, with_a
             v[layer_pressure] = data_arrays["pressure"].GetValue(x)
             v[layer_omega_sig] = data_arrays["omega_sig"].GetValue(x)
             v[layer_elevation] = data_arrays["elevation"].GetValue(x)
+    return bm
+
+def get_points_per_vtu_from_pvtu(pvtu_file):
+    # Parse the .pvtu XML to find VTU filenames
+    tree = ET.parse(pvtu_file)
+    root = tree.getroot()
+
+    vtu_files = [piece.attrib['Source'] for piece in root.findall('.//Piece')]
+    points_per_file = []
+
+    for vtu_file in vtu_files:
+        reader = vtk.vtkXMLUnstructuredGridReader()
+        reader.SetFileName(os.path.join(os.path.dirname(pvtu_file), vtu_file))
+        reader.Update()
+        grid = reader.GetOutput()
+        points_per_file.append(grid.GetNumberOfPoints())
+
+    return vtu_files, points_per_file
+
+def remap_index_from_coords(
+    index, x, y,
+    res_x, res_y, res_z,
+    width, height,
+    points_per_block,
+    flip_x=False, flip_y=False
+):
+    # --- Step 1: Find which block this index belongs to ---
+    total_points = 0
+    block_id = -1
+    for i, count in enumerate(points_per_block):
+        if index < total_points + count:
+            block_id = i
+            break
+        total_points += count
+
+    if block_id == -1:
+        raise ValueError("Index out of bounds of total points in blocks")
+
+    # --- Step 2: Local index within the block ---
+    local_index = index - total_points
+    block_points = points_per_block[block_id]
+    points_per_layer = block_points // res_z
+
+    layer = local_index // points_per_layer  # bottom = 0
+
+    # --- Step 3: Get global x/y indices ---
+    spacing_x = width / (res_x - 1)
+    spacing_y = height / (res_y - 1)
+
+    grid_x = int(round(x / spacing_x))
+    grid_y = int(round(y / spacing_y))
+
+    if flip_x:
+        grid_x = res_x - 1 - grid_x
+    if flip_y:
+        grid_y = res_y - 1 - grid_y
+
+    # --- Step 4: Compute global index (top layer first) ---
+    global_index = ((res_z - 1 - layer) * res_y * res_x +
+                    grid_y * res_x +
+                    grid_x)
+
+    return global_index
+
+def exctract_NHFLOW_neatly_structured_pointcloud_from_pvtu(filepath: str, context: Context, points_pr_block: list[int], with_attributes=True):
+    if not BLENDER_AVAILABLE:
+        raise ValueError(f"Cannot use the function (exctract_NHFLOW_pointcloud_from_pvtu) outside of blender")
+    
+    # Check if the file is .pvtu (parallel) or .vtu (single file)
+    if filepath.endswith(".pvtu"):
+        reader = vtk.vtkXMLPUnstructuredGridReader()  # Use parallel reader
+    else:
+        reader = vtk.vtkXMLUnstructuredGridReader()  # Use single-file reader
+    reader.SetFileName(filepath)
+    reader.Update()
+
+    # Get the mesh output from the reader
+    mesh = reader.GetOutput()
+    points = mesh.GetPoints()
+    partitions = context.partition_dimentions # [x, y]
+    print(partitions)
+    print(f"Partitions: {partitions}")
+    
+
+    # Create Blender return mesh
+    bm = bmesh.new()
+    if with_attributes:
+        data_arrays = {
+            "velocity": mesh.GetPointData().GetArray(0),
+            "pressure": mesh.GetPointData().GetArray(1),
+            "omega_sig": mesh.GetPointData().GetArray(2),
+            "elevation": mesh.GetPointData().GetArray(3)
+        }
+        layer_velocity = bm.verts.layers.float_vector.new("velocity")
+        layer_pressure = bm.verts.layers.float.new("pressure")
+        layer_omega_sig = bm.verts.layers.float.new("omega_sig")
+        layer_elevation = bm.verts.layers.float.new("elevation")
+
+        # Adding a few other layer properties to display the structure of the grid
+        layer_index = bm.verts.layers.int.new("index")
+        layer_index_color = bm.verts.layers.float.new("index_color")
+        layer_read_color = bm.verts.layers.float.new("read_color")
+
+    for x in range(points.GetNumberOfPoints()):
+        a = [0, 0, 0]
+        points.GetPoint(x, a)
+        v = bm.verts.new(a)
+       
+        if with_attributes:
+            v[layer_velocity] = data_arrays["velocity"].GetTuple3(x)
+            v[layer_pressure] = data_arrays["pressure"].GetValue(x)
+            v[layer_omega_sig] = data_arrays["omega_sig"].GetValue(x)
+            v[layer_elevation] = data_arrays["elevation"].GetValue(x)
+
+            res_x = context.grid_resolution[0]
+            res_y = context.grid_resolution[1]
+            res_z = context.grid_resolution[2] + 1 # Because the floor as not considered a layer
+            remaped_index = remap_index_from_coords(
+                index=x, 
+                x=a[0], 
+                y=a[1], 
+                res_x=res_x, 
+                res_y=res_y, 
+                res_z=res_z, 
+                width=context.domain_dimentions[1]-context.domain_dimentions[0], 
+                height=context.domain_dimentions[3]-context.domain_dimentions[2], 
+                points_per_block=points_pr_block, 
+                flip_x=True
+            )
+            v[layer_index] = remaped_index
+            v[layer_index_color] = remaped_index/(res_x*res_y*res_z - 1)
+            v[layer_read_color] = x/(points.GetNumberOfPoints()-1)
     return bm
 
 def extract_NHFLOW_mesh_from_pvtu(filepath: str, context: Context, surface_only=False, with_attributes=True, with_faces=True):
@@ -329,7 +461,7 @@ def fill_zeros(frame_count, length=8):
 #     zeros = '0' * (length - len(str(frame_count)))
 #     return f'{zeros}{frame_count}'
 
-def create_water_object(mesh_data: bmesh, object_name: str, collection: str, visible_keyframe=-1, as_pointcloud=False, subdevide_and_edge_crease=False):
+def create_water_object(mesh_data: bmesh, object_name: str, collection: str, visible_keyframe=-1, as_pointcloud=False, subdevide_and_edge_crease=False, custom_geometry_node=None):
     if not BLENDER_AVAILABLE: return
     """Creates a Blender object with the given mesh data and assigns the 'Water' material."""
     # Create a new mesh and object
@@ -355,6 +487,11 @@ def create_water_object(mesh_data: bmesh, object_name: str, collection: str, vis
     if 'mesh_2_pointcloud' in bpy.data.node_groups and as_pointcloud:
         modifier = obj.modifiers.new(name='Mesh to PointCloud', type='NODES')
         modifier.node_group = bpy.data.node_groups['mesh_2_pointcloud']
+
+    # Add additional custom geometry node 
+    if custom_geometry_node and custom_geometry_node in bpy.data.node_groups:
+        modifier = obj.modifiers.new(name='Custom Modifier', type='NODES')
+        modifier.node_group = bpy.data.node_groups[custom_geometry_node]
 
     # Smooth the surface
     if subdevide_and_edge_crease:
@@ -409,20 +546,20 @@ def pose_floating(object_names, position, rotation_zyx, keyframe = -1):
             obj.keyframe_insert(data_path="rotation_euler", frame=keyframe)
 
 if __name__ == "__main__":
-    render = True  # TODO
-    nhflow = True  # TODO
-    floating = False # TODO
-    simulation = 'examples/floating'    # TODO
+    render = True  # TODO-USER
+    nhflow = True  # TODO-USER
+    floating = False # TODO-USER
+    simulation = 'examples/big_ocean'    # TODO-USER
 
     context = Context()
     context.read_control(f'{root}/data/{simulation}/control.txt')
     context.read_ctrl(f'{root}/data/{simulation}/ctrl.txt')
 
-    fps = 24 # TODO: find this from context and set the blender fps to this fps 
+    fps = 24 # TODO-USER: find this from context and set the blender fps to this fps 
 
-    start_frame = 124   # TODO
-    end_frame = 721     # TODO
-    batch_size = 4      # TODO: anywhere between 1 and 4 should be nice regardless of your PC specs  
+    start_frame = 0   # TODO-USER
+    end_frame = 0     # TODO-USER
+    batch_size = 1    # TODO-USER: anywhere between 1 and 4 should be nice regardless of your PC specs  
 
     bpy.context.scene.frame_start = start_frame
     bpy.context.scene.frame_end = end_frame
@@ -430,6 +567,7 @@ if __name__ == "__main__":
     wave_collection = 'Waves'
 
     frames_loaded = start_frame-1
+    end_frame += 1
     batch = 0
     for batch_start in range(start_frame, end_frame, batch_size):
         batch_end = min(batch_start + batch_size, end_frame)  # Ensure last batch is handled properly
@@ -449,12 +587,25 @@ if __name__ == "__main__":
                 file_name_skeleton_0 = "REEF3D-NHFLOW-"
                 file_name_skeleton_1 = ".pvtu"
                 filepath_pvtu = f"{root}/{filepath}/{file_name_skeleton_0}{fill_zeros(frame)}{file_name_skeleton_1}"
-                mesh = extract_NHFLOW_mesh_from_pvtu(
+                
+                # mesh = extract_NHFLOW_mesh_from_pvtu(
+                #     filepath=filepath_pvtu, 
+                #     context=context, 
+                #     surface_only=True,
+                #     with_attributes=True,
+                #     with_faces=False,
+                # )
+                # mesh = exctract_NHFLOW_pointcloud_from_pvtu(
+                #     filepath=filepath_pvtu, 
+                #     context=context,
+                #     with_attributes=True
+                # )
+                _, points_pr_block = get_points_per_vtu_from_pvtu(filepath_pvtu)
+                mesh = exctract_NHFLOW_neatly_structured_pointcloud_from_pvtu(
                     filepath=filepath_pvtu, 
-                    context=context, 
-                    surface_only=False,
-                    with_attributes=False,
-                    with_faces=True,
+                    context=context,
+                    points_pr_block=points_pr_block,
+                    with_attributes=True
                 )
                 create_water_object(
                     mesh_data=mesh, 
@@ -462,7 +613,8 @@ if __name__ == "__main__":
                     collection=wave_collection,
                     visible_keyframe=frame,
                     as_pointcloud=False,
-                    subdevide_and_edge_crease=True
+                    subdevide_and_edge_crease=False,
+                    custom_geometry_node='display_structure'
                 )
 
             ####################

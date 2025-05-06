@@ -1,31 +1,61 @@
 from custom_blender_core import *
 
+def prime_factorize(number):
+    primes = []
+    number = int(number)
+
+    factor = 2
+    while number > 1:
+        # Finding a prime factor
+        if number%factor == 0:
+            number /= factor
+            primes.append(factor)
+            factor = 2
+            continue
+
+        # The number remaining is a prime
+        if factor > math.sqrt(number):
+            primes.append(number)
+            break
+        factor += 1
+
+    return primes
+        
+
 class Context:
     def __init__(self):
-        self._DIVEMESH_read = False
-        self._REEF3D_read = False
-        self._primitive_S_cmds = [10, 11, 12, 32, 33] # TODO
-        self._grid_resolution = [] # B 2
-        self._domain_dimentions = [] # B 10
-        self._static_primitives_cmds = [] # S 10, 11, 12, 32, 33, 
-        self._mpi_cores = 1
-        self._floating = False
+        self.__DIVEMESH_read = False
+        self.__REEF3D_read = False
+        self.__primitive_S_cmds = [10, 11, 12, 32, 33] # TODO
+        self.__grid_resolution = [] # B 2
+        self.__domain_dimentions = [] # B 10
+        self.__static_primitives_cmds = [] # S 10, 11, 12, 32, 33, 
+        self.__mpi_cores = 1
+        self.__floating = False
 
     @property
     def grid_resolution(self):
-        return self._grid_resolution
+        return self.__grid_resolution
     
     @property
     def domain_dimentions(self):
-        return self._domain_dimentions
+        return self.__domain_dimentions
     
     @property
     def mpi_cores(self):
-        return self._mpi_cores
+        return self.__mpi_cores
+    
+    @property
+    def partition_dimentions(self):
+        dimentions = [1, 1]
+        factors = prime_factorize(self.__mpi_cores)
+        for i, fac in enumerate(factors[::-1]):
+            dimentions[i%2] *= fac
+        return dimentions
     
     @property
     def floating(self):
-        return self._floating
+        return self.__floating
 
     def read_ctrl(self, filepath: str):
         if not filepath.endswith("ctrl.txt"):
@@ -42,14 +72,14 @@ class Context:
 
                         if cmd_class == "M": # MPI
                             if cmd_type == 10:
-                                self._mpi_cores = int(cmd_variables[0])
+                                self.__mpi_cores = int(cmd_variables[0])
                             # elif cmd_type == 10:
                             #     pass
                             else:
                                 raise
                         elif cmd_class == "X": # 6DOF
                             if cmd_type == 180:
-                                self._floating = True
+                                self.__floating = True
                     except:
                         print(f"Unable to parse line: {line}")
 
@@ -68,9 +98,9 @@ class Context:
 
                         if cmd_class == "B": # Boundary
                             if cmd_type == 2:
-                                self._grid_resolution = [int(cmd_variables[i]) for i in range(3)]
+                                self.__grid_resolution = [int(cmd_variables[i]) for i in range(3)]
                             elif cmd_type == 10:
-                                self._domain_dimentions = [float(cmd_variables[i]) for i in range(6)]
+                                self.__domain_dimentions = [float(cmd_variables[i]) for i in range(6)]
                             else:
                                 raise
                         if cmd_class == "C": # Channels
@@ -84,22 +114,22 @@ class Context:
                         if cmd_class == "H": # Hydrodynamic Coupling
                             pass
                         if cmd_class == "S": # Solid
-                            if cmd_type in self._primitive_S_cmds:
-                                self._static_primitives_cmds.append(parts)
+                            if cmd_type in self.__primitive_S_cmds:
+                                self.__static_primitives_cmds.append(parts)
                             #  elif cmd_type == 
                         if cmd_class == "T": # Topo
                             pass
                     except:
                         print(f"Unable to parse line: {line}")
-        self._DIVEMESH_read = True
+        self.__DIVEMESH_read = True
 
     # def get_sigma_grid_shell(self):
-    #     if not self._DIVEMESH_read or not BLENDER_AVAILABLE: 
+    #     if not self.__DIVEMESH_read or not BLENDER_AVAILABLE: 
     #         return None
 
     #     bm = bmesh.new()
-    #     x_min, x_max, y_min, y_max, z_min, z_max = self._domain_dimentions
-    #     x_res, y_res, z_res = self._grid_resolution
+    #     x_min, x_max, y_min, y_max, z_min, z_max = self.__domain_dimentions
+    #     x_res, y_res, z_res = self.__grid_resolution
     #     bmesh.ops.create_cube(bm, size=1.0)
     #     for vert in bm.verts:
     #         vert.co.x = x_min + (x_max - x_min) * (vert.co.x + 0.5)
@@ -114,22 +144,22 @@ class Context:
 
     def get_static_primitives(self):
         bmesh_stack = []
-        for i in range(len(self._static_primitives_cmds)):
-            if self._static_primitives_cmds[i][0] != "S": continue
+        for i in range(len(self.__static_primitives_cmds)):
+            if self.__static_primitives_cmds[i][0] != "S": continue
 
             # What does the numbers mean?? -> look at DiveMESH documentatoion [DIVEMesh-UserGuide.pdf]
-            if self._static_primitives_cmds[i][1] == 10: # RECTANGLE (x_start, x_end, y_start, y_end, z_start, z_end)
+            if self.__static_primitives_cmds[i][1] == 10: # RECTANGLE (x_start, x_end, y_start, y_end, z_start, z_end)
                 pass
-            elif self._static_primitives_cmds[i][1] == 11: # RECTANGLE ARRAY (x_origin, y_origin, z_origin, length_ni, gap_ni, length_nj, gap_nj, length_nk, gap_nk)
+            elif self.__static_primitives_cmds[i][1] == 11: # RECTANGLE ARRAY (x_origin, y_origin, z_origin, length_ni, gap_ni, length_nj, gap_nj, length_nk, gap_nk)
                 pass
-            elif self._static_primitives_cmds[i][1] == 12: # BEAM
+            elif self.__static_primitives_cmds[i][1] == 12: # BEAM
                 pass
 
-            elif self._static_primitives_cmds[i][1] == 32: # CYLINDER IN X DIRECTION ()
+            elif self.__static_primitives_cmds[i][1] == 32: # CYLINDER IN X DIRECTION ()
                 pass
-            elif self._static_primitives_cmds[i][1] == 33: # CYLINDER IN Y DIRECTION ()
+            elif self.__static_primitives_cmds[i][1] == 33: # CYLINDER IN Y DIRECTION ()
                 pass
-            elif self._static_primitives_cmds[i][1] == 11: # CYLINDER [FLEXIBLE] ()
+            elif self.__static_primitives_cmds[i][1] == 11: # CYLINDER [FLEXIBLE] ()
                 pass
         return bmesh_stack
 

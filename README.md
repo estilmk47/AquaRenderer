@@ -1,58 +1,78 @@
-# AquaRenderer
-This is a blender-project that loads NHFLOW simulations from .vtu files - such as the output from DiveMesh and REEF3D - into blender so that the simnulation can be rendered in the blenders render engines with blenders flexible artistic tools, that your simulation deserves  
+# AquaRenderer  
+This is a Blender project that loads NHFLOW simulations from `.vtu` files — such as the output from DiveMesh and REEF3D — into Blender so that the simulation can be rendered using Blender's render engines and its flexible artistic tools, which your simulation deserves.
 
-# Pre-requirements:
-- Blender
-- Python [A version of python will be available with the blender instalation, without requireing you to download python]
-- acces to terminal [Duh]
+# Requirements:
+- Blender  
+- Python *(A version of Python is bundled with the Blender installation, so downloading Python separately is not required, but still recommended)*  
+- Access to a terminal
 
-# Optional requiremenmts:
+# Optional Requirements:
 - VS Code
 
 # HOW 2 - STEP BY STEP
-1. Download repo: 
-    * <> Code 
-    - Option 1: git clone https://github.com/estilmk47/AquaRenderer.git 
-    - Option 2: Downlaod zip
 
-2. Setup the IDE and python environment:
-    - Open a terminal in the main repo 
-    - Create the environment:
-        Make sure to use the same python version as your blender install
-        - Use the terminal cmd: python -m venv <name_of_your_viritual_environment> (Recomended to use '.venv' or 'venv')
-        - Use a similar terminal cmd: & "C:\Program Files\Blender Foundation\Blender 4.2\4.2\python\bin\python.exe" -m venv venv (This ensures packages you later install with pip is compatible with the python that is ran in blender)
-    - Change the venv variable in the sccript.py to whatever you chose to name your environment (If you named it .venv you do not need to change this variable)
-    - activate the viritual environment:
-        - WINDOWS: <name_of_your_viritual_environment>/Script/activate
-        - Other operating systems: "You know better then me, or can probably find it out faster then me"
+1. **Download the repo:**  
+    *Click on `<> Code`*  
+    - Option 1: `git clone https://github.com/estilmk47/AquaRenderer.git`  
+    - Option 2: Download ZIP
 
-3. Install python requirements:
-    - NB: Ensure and resolve that the python environment is of the same version that your blender version is runnig [Probably ]   
-    - When the venv is activated run:
-        - pip install -r requirements.txt
+2. **Set up the IDE and Python environment:**  
+    - Open a terminal in the "root" (main folder) of the repository  
+    - Create the environment:  
+        Make sure to use the same Python version as your Blender installation  
+        - Command: `python -m venv <name_of_your_virtual_environment>` *(Recommended: `.venv` or `venv`)*  
+        - On Windows you can check your the blender python version by:  
+          ```powershell
+          & "C:\Program Files\Blender Foundation\Blender 4.2\4.2\python\bin\python.exe --version"
+          ```  
+          *(This ensures packages you install with pip are compatible with Blender’s Python interpreter)*  
+    - Change the `venv` variable in `script.py` to match your virtual environment name (If you named it `venv`, no changes needed)
+    - **Activate the virtual environment:**  
+        - **Windows:** `<name_of_virtual_environment>/Scripts/activate`  
+        - **Other OSes:** "You probably know better than me, or can find it out faster than me"
 
-4. Run the script from blender:
-    - Open blender.
-    - Navigate to the scripting window.
-    - Delete the current scripts path as it is not linked to the script.py file on your computer
-    - Open a new Script/Text 'script.py' [and rename it - good practice]
-    - OPTIONAL:
-        - Change the all the lines commented with TODO in the *if __name__ == '__main__':* part of the script if you do not want to run the example. (The very bottom of almost all python scripts that has it) 
-        - Click on Window > Toggle System Console [This tab is very convenient for debugging, you may print directly to this terminal from your python scripts]
-    - Run the script (Play button in scripting tab, *or*, Alt+P for hotkey-users)
+3. **Install Python requirements:**  
+    - **Note:** Ensure that your Python environment matches Blender’s Python version (likely version 3.11)  
+    - When the virtual environment is activated, run:  
+      ```bash
+      pip install -r requirements.txt
+      ```  
+    - *Technically, you only need to install the Python packages used after `sys.path.append(python_env_path)` [line 31 - 33], as the rest are either core Python modules or bundled with Blender’s Python.*  
+    - If you're unsure which libraries these are (but want to know), check the path similar to:  
+      ```
+      C:\Program Files\Blender Foundation\Blender 4.2\4.2\python\lib\site-packages
+      ```
 
-Technically you only need to install the python packages after *sys.path.append(pyhton_env_path) [16]* as the other ones are either a part of python core or the python packages that came with Blender.
-If you don't know which libraries these are [but you want to know], may I suggest looking in the path similar to C:\Program Files\Blender Foundation\Blender 4.2\4.2\python\lib\site-packages on your computer.
+4. **Run the script from Blender:**  
+    - Open Blender  
+    - Navigate to the Scripting workspace  
+    - Delete the current script path (it is not linked to your local `script.py`)  
+    - Open a new script/text editor and select `script.py` *(rename it — good practice)*  
+    - **OPTIONAL:**  
+        - Modify all lines marked with `TODO-USER` in the `if __name__ == '__main__':` block if you don't want to run the default example  
+        - Click `Window > Toggle System Console` *(useful for debugging; `print()` output will appear here)*  
+    - Run the script *(Play button in the Scripting tab, or Alt+P if you're into hotkeys — must be in the Scripting tab)*
 
+5. **(Download Examples):**  
+    - **Floating:** [Download (2.10 GB Compressed, 4.52 GB Unzipped)](https://jonekra.folk.ntnu.no/git/supplement/AquaRendererDownloadExamples/floating.zip)  
+    - **Single Split:** [Download (432 MB Compressed, 924 MB Unzipped)](https://jonekra.folk.ntnu.no/git/supplement/AquaRendererDownloadExamples/single_split_experiment.zip)
 
 # TECHNICAL NOTES:
-- VS Code:
-    - The bpy object is "quantom entageled" with the blender file. We download blender-stubs instead to make the IDE [VS Code] get acces to autocomplete which makes code dev much easier in these modern times. This means, on the other hand, that the script will not be able to run from your IDE as it does not have acces to the blender file [only the stbs]. Run the script from blender instead:
-- BLENDER:
-    - The base blender file [main.blend] is suppose to have a few assets "living inside the blender file" (eg geometry nodes and some objects). The script assumes these are pressent. If you modify the name of these the script may fail.
-    - Blender only fetches the script you are running and the other dependant script that are not allready fetched. If you modify scripts that the main script depends on blender will not know unless you close and re-open the blender file. DO NOT waste time debugging code that is not even beeing run!
-    - The Scripting window layout have been changed to be convenient for development with VS Code. After a change in VS Code a RED alert should be visible on the scripting tab. Click on it and 
 
-- ENVIRONMENT:
-    - When you create your viritual envoronment to download the extra site-packages ensure it is the of the same version as whatever your blender is running:
-        - you can check the python version of blender by running the *python.exe* with the *--version flag* from the path similar to C:\Program Files\Blender Foundation\Blender 4.2\4.2\python\bin
+- **VS Code:**  
+    - The `bpy` object is *"quantum entangled"* with the Blender file and only truly exists within it. Instead, we use Blender stubs to give the IDE (like VS Code) access to autocompletion, making development easier.  
+    - This means the script won't run directly from your IDE since the IDE has no access to Blender’s runtime — only the stubs. Always run scripts from inside Blender!
+
+- **Blender:**  
+    - The base Blender file (`main.blend`) is supposed to include a few embedded assets (e.g., geometry nodes and some objects). The script assumes these are present. If you rename or delete them, the script may fail.  
+    - Blender only loads the script you're currently running and **NOT** dependent scripts that have already been fetched. If you change a dependency, Blender won’t notice unless you reopen the `.blend` file.  
+      **DO NOT** waste time debugging code that isn’t even being executed!  
+    - The Scripting workspace layout has been customized for convenience when developing with VS Code.  
+      After editing in VS Code, a **red alert** should appear in the scripting tab. Click it to reload the script into Blender after external edits.
+
+- **Environment:**  
+    - When creating your virtual environment for installing external site-packages, ensure it matches the Python version Blender uses:  
+      - You can verify Blender’s Python version by running its `python.exe` with the `--version` flag from a path like:  
+        ```
+        C:\Program Files\Blender Foundation\Blender 4.2\4.2\python\bin
+        ```
