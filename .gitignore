@@ -2,3 +2,4 @@
 venv/
 data/ignore/
 output/ANIM/*/
+output/raster/*/
